@@ -1,150 +1,223 @@
-// server.js
-
-// Express kutubxonasini chaqirish
 const express = require('express');
-//Cors kutubxonasini chaqirish
 const cors = require('cors');
-// Mongoose kutubxonasini chaqirish
 const mongoose = require('mongoose');
-// Body-parser kutubxonasini chaqirish
 const bodyParser = require('body-parser');
-//Jwt kutubhonasini yuklash
-const jwt = require("jsonwebtoken")
-// Express ilovasini yaratish
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
+// JWT (Json Web Token) китобхонасини юклаш
+const jwt = require("jsonwebtoken");
+const { type } = require('os');
+const bcrypt = require('bcrypt');
+// Экспресс иловасини ишга туширамиз
 const app = express();
 
-// CORS қўшиш
+
+// CORS'ни улаш, турли доменлардан сўровларга рухсат беради
 app.use(cors());
+app.use(bodyParser.json()); // JSON форматдаги маълумотларни қабул қилишга тайёрлаш
+// "uploads" папкасини статик қилиб қўйиш, яъни файлларни интернетдан кўриш мумкин бўлади
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// MongoDB билан боғланиш
+mongoose.connect('mongodb+srv://alikhanov13:8ejWWGGweheMXHC8@cluster0.zltuj21.mongodb.net/', { useNewUrlParser: true, useUnifiedTopology: true })
+     .then(() => console.log('Connected to MongoDB'))
+     .catch(err => console.error('Could not connect to MongoDB', err));
 
-// JSON formatdagi so'rovlarni parsing qilish
-app.use(bodyParser.json());
-
-// MongoDB ga ulanish
-mongoose.connect('mongodb+srv://alikhanov13:8ejWWGGweheMXHC8@cluster0.zltuj21.mongodb.net/', {
-     useNewUrlParser: true,
-     useUnifiedTopology: true,
-});
-//MongoDb serverga ulangan xolatini bilish
+// MongoDB билан боғланишни кузатиб бориш
 const db = mongoose.connection;
-db.on('error', (error) => {
-     console.error('MongoDB ulanishida xatolik:', error);
-});
+db.on('error', (error) => console.error('MongoDB билан боғланишда хатолик:', error));
 db.once('open', () => {
-     console.log('MongoDB ga muvaffaqiyatli ulandi');
-});
-// Mahsulot sxemasini yaratish
-const productSchema = new mongoose.Schema({
-     name: String,      // Mahsulot nomi
-     price: Number,     // Mahsulot narxi
-     quantity: Number,  // Mahsulot miqdori
+     console.log('MongoDB муваффақиятли уланди');
 });
 
-// Mahsulot modelini yaratish
-const Product = mongoose.model('Product', productSchema);
-
-// Barcha mahsulotlarni olish
-app.get('/products', async (req, res) => {
-     try {
-          const products = await Product.find();  // Mahsulotlarni bazadan olish
-          res.json(products);  // Mahsulotlarni JSON formatda javob qaytarish
-     } catch (error) {
-          res.status(500).send(error);  // Xatolik yuz bersa, 500 status kodi bilan xato yuborish
-     }
+// MongoDB учун схема тайёрлаймиз, у маълумотларни қандай сақлашни аниқлайди
+const homeAddingSchema = new mongoose.Schema({
+     category: { type: String, required: true },  // Категория майдони
+     contacts: { type: String, required: true },  // Контактлар майдони
+     details: { type: String, required: true },  // Тафсилотлар майдони
+     images: { type: [String], required: true },  // Расмлар учун массив (бир неча расм сақланади)
+     mobilecontact:{ type: Number, required: true },//Телефон ракам киритиш
+     location: { type: String, required: true },  // Жойлашув майдони
+     price: { type: String, required: true },  // Нархи майдони
 });
-
-// Yangi mahsulot qo'shish
-app.post('/products', async (req, res) => {
-     const { name, price, quantity } = req.body;  // So'rovdan mahsulot ma'lumotlarini olish
-     const newProduct = new Product({ name, price, quantity });  // Yangi mahsulot yaratish
-     try {
-          await newProduct.save();  // Mahsulotni bazaga saqlash
-          res.status(201).json(newProduct);  // Mahsulot yaratildi, 201 status kodi bilan javob qaytarish
-     } catch (error) {
-          res.status(400).send(error);  // Xatolik yuz bersa, 400 status kodi bilan xato yuborish
-     }
+//MongoDb дан регистрация малумотларини саклаш учун
+const userSchema = new mongoose.Schema({
+     login: { type: String, required: true, unique: true },
+     password: { type: String, required: true },
 });
+//
+const HomeAdding = mongoose.model('HomeAdding', homeAddingSchema); // Создание модели на основе схемы
 
-// Mahsulotni tahrirlash
-app.put('/products/:id', async (req, res) => {
-     const { id } = req.params;  // URL parametridan mahsulot ID sini olish
-     const { name, price, quantity } = req.body;  // So'rovdan tahrirlanadigan mahsulot ma'lumotlarini olish
-     try {
-          const updatedProduct = await Product.findByIdAndUpdate(
-               id,  // Mahsulot ID si
-               { name, price, quantity },  // Yangilanishlar
-               { new: true }  // Yangilangan mahsulotni qaytarish
-          );
-          res.json(updatedProduct);  // Yangilangan mahsulotni JSON formatda javob qaytarish
-     } catch (error) {
-          res.status(400).send(error);  // Xatolik yuz bersa, 400 status kodi bilan xato yuborish
-     }
-});
-
-// Mahsulotni o'chirish
-app.delete('/products/:id', async (req, res) => {
-     const { id } = req.params;  // URL parametridan mahsulot ID sini olish
-     try {
-          await Product.findByIdAndDelete(id);  // Mahsulotni ID si bo'yicha o'chirish
-          res.status(204).send();  // O'chirilgan mahsulot uchun 204 status kodi bilan javob qaytarish
-     } catch (error) {
-          res.status(500).send(error);  // Xatolik yuz bersa, 500 status kodi bilan xato yuborish
-     }
-});
-
-
-// Login va Register uchun funksiyani yaratish
-const loginAdmin = async (req, res) => {
-     // So'rovdan login va parolni olamiz
-     const { login, password } = req.body;
-
-     let role;
-     // Agar login va parol 'admin' bo'lsa, rolni 'admin' qilib belgilaymiz
-     if (login === 'admin' && password === 'admin') {
-          role = 'admin';
-          // Agar login va parol 'user' bo'lsa, rolni 'user' qilib belgilaymiz
-     } else if (login === 'user' && password === 'user') {
-          role = 'user';
-          // Agar login va parol mos kelmasa, 401 status kodi bilan xato xabarini yuboramiz
-     } else {
-          return res.status(401).json({ message: 'Login yoki parol noto\'g\'ri' });
-     }
-
-     // Token yaratish uchun sirli kalitni belgilaymiz
-     const secretKey = 'maxfun';
-     // JWT token yaratamiz va unga foydalanuvchi rolini joylaymiz, bu token 7 kun davomida yaroqli bo'ladi
-     const token = jwt.sign({ role }, secretKey, { expiresIn: '7d' });
-
-     // Yaratilgan tokenni javob sifatida qaytaramiz
-     return res.status(200).json({ token });
-};
-
-// Tokenni tekshirish funksiyasi
-const checkToken = (req, res) => {
-     // So'rovning sarlavhasidan tokenni olamiz (Authorization bo'limidan)
+//
+const User = mongoose.model('User', userSchema);
+//
+const authMiddleware = (req, res, next) => {
      const token = req.headers.authorization?.split(' ')[1];
-     const secretKey = 'maxfun';
-
-     // Agar token topilmasa, 401 status kodi bilan xato xabarini yuboramiz
      if (!token) {
-          return res.status(401).json({ message: 'Token topilmadi' });
+          return res.status(401).json({ message: 'Нет доступа' });
      }
 
      try {
-          // Tokenni sirli kalit yordamida dekodlaymiz va foydalanuvchi rolini qaytaramiz
-          const decoded = jwt.verify(token, secretKey);
-          return res.status(200).json({ role: decoded.role });
-     } catch (err) {
-          // Agar token yaroqsiz bo'lsa, 401 status kodi bilan xato xabarini yuboramiz
-          return res.status(401).json({ message: 'Token yaroqsiz' });
+          const decoded = jwt.verify(token, 'секретный_ключ'); // Используем тот же ключ
+          req.userId = decoded.userId;
+          next();
+     } catch (error) {
+          return res.status(401).json({ message: 'Неверный токен' });
      }
 };
+//
 
-//Marshurutlar yaratish
-app.post('/login', loginAdmin);
+app.post('/register', async (req, res) => {
+     try {
+          const { login, password } = req.body;
+          if (!login || !password) {
+               return res.status(400).json({ message: 'Не все поля заполнены' });
+          }
+          const existingUser = await User.findOne({ login });
+
+          if (existingUser) {
+               return res.status(400).json({ message: 'Логин уже используется' });
+          }
+
+          const hashedPassword = await bcrypt.hash(password, 10);
+          const newUser = new User({
+               login,
+               password: hashedPassword,
+          });
+
+          await newUser.save();
+          res.status(201).json({ message: 'Пользователь успешно зарегистрирован' });
+     } catch (error) {
+          res.status(500).json({ error: 'Ошибка сервера' });
+     }
+});
+;
+// Пример защищённого маршрута
+app.get('/protected', authMiddleware, (req, res) => {
+     res.json({ message: 'Это защищённый маршрут', userId: req.userId });
+});
 
 
-// Serverni ishga tushirish
-const PORT = 5007;  // Server porti
+// Multer файлларни юклашни бошқариш учун ишлатилади
+const storage = multer.diskStorage({
+     destination: (req, file, cb) => {
+          cb(null, 'uploads');  // Файлларни "uploads" папкасига юклаймиз
+     },
+     filename: (req, file, cb) => {
+          cb(null, Date.now() + path.extname(file.originalname));  // Файлларга уникал ном бериш
+     },
+});
+
+// Файлларни қабул қилиш учун Multer конфигурацияси
+const upload = multer({
+     storage: storage,
+     limits: { fileSize: 1000000 },  // Файл ҳажми 1MB билан чегараланган
+     fileFilter: (req, file, cb) => {
+          const fileTypes = /jpeg|jpg|png|jfif/;  // Қабул қилинган файл турлари
+          const extname = fileTypes.test(path.extname(file.originalname).toLowerCase());
+          const mimetype = fileTypes.test(file.mimetype);
+
+          if (extname && mimetype) {
+               cb(null, true);
+          } else {
+               cb('Хатолик: Фақат JPEG, JPG, PNG файлларини юклаш мумкин');
+          }
+     },
+});
+
+
+app.post('/login', async (req, res) => {
+     try {
+          const { login, password } = req.body;
+
+          // Ищем пользователя по логину
+          const user = await User.findOne({ login });
+          if (!user) {
+               return res.status(401).json({ message: 'Неправильный логин или пароль' });
+          }
+
+          // Проверяем пароль
+          const isPasswordValid = await bcrypt.compare(password, user.password);
+          if (!isPasswordValid) {
+               return res.status(401).json({ message: 'Неправильный логин или пароль' });
+          }
+
+          // Создаем JWT-токен
+          const token = jwt.sign({ userId: user._id }, 'секретный_ключ', { expiresIn: '7d' });
+
+          res.status(200).json({ token });
+     } catch (error) {
+          res.status(500).json({ error: 'Ошибка сервера' });
+     }
+});
+// Эълонларни юклаш йўли
+app.post('/add-home', upload.array('images', 8), async (req, res) => {
+     try {
+          const { category, contacts, details, mobilecontact, location, price } = req.body;  // Клиентдан олинган маълумотлар
+          const images = req.files.map((file) => `/uploads/${file.filename}`);  // Расмларнинг йўлларини сақлаш
+
+          // Янгидан уй эълонини яратиш
+          const newHome = new HomeAdding({
+               category,
+               contacts,
+               details,
+               images,
+               mobilecontact,
+               location,
+               price,
+          });
+
+          await newHome.save();  // Яратилган эълонни MongoDB'га сақлаш
+          res.status(201).json({ message: 'Эълон муваффақиятли қўшилди', home: newHome });  // Муваффақият хабарини юбориш
+     } catch (error) {
+          console.error('Эълон қўшишда хатолик:', error);
+          res.status(500).json({ error: 'Сервер хатоси' });
+     }
+});
+// Барча эълонларни олиш йўли
+app.get('/get-all-ad', async (req, res) => {
+     try {
+          const getAllAds = await HomeAdding.find();  // Барча эълонларни олиш
+          res.status(200).json(getAllAds);  // JSON форматда эълонларни юбориш
+     } catch (error) {
+          console.error('Эълонларни олишда хатолик:', error);
+          res.status(500).json({ error: 'Сервер хатоси' });
+     }
+});
+// Аниқ бир эълонни ID орқали олиш
+app.get('/get-ad/:id', async (req, res) => {
+     try {
+          const ad = await HomeAdding.findById(req.params.id);  // ID бўйича эълонни олиш
+          if (!ad) {
+               return res.status(404).json({ message: 'Эълон топилмади' });  // Агар эълон топилмаса, хабар бериш
+          }
+          res.status(200).json(ad);  // Эълонни юбориш
+     } catch (error) {
+          console.error('Эълонни олишда хатолик:', error);
+          res.status(500).json({ error: 'Сервер хатоси' });
+     }
+});
+
+// Токенни текшириш функцияси
+const checkToken = (req, res) => {
+     const token = req.headers.authorization?.split(' ')[1];  // Токенни HTTP бошлиқдан олиш
+     const secretKey = 'maxfun';  // Токен текшириш учун махфий калит
+
+     if (!token) {
+          return res.status(401).json({ message: 'Токен топилмади' });  // Агар токен топилмаса
+     }
+
+     try {
+          const decoded = jwt.verify(token, secretKey);  // Токенни декод қилиш
+          return res.status(200).json({ role: decoded.role });  // Фойдаланувчи ролини юбориш
+     } catch (err) {
+          return res.status(401).json({ message: 'Токен яроқсиз' });  // Токен яроқсиз бўлса
+     }
+};
+// Логин учун йўл
+
+// Серверни эшитишни бошлаш
+const  PORT = 5007;
 app.listen(PORT, () => {
-     console.log(`Server is running on port ${PORT}`);  // Server ishga tushdi
+     console.log(`Сервер ${PORT}-портда ишламоқда`);
 });
