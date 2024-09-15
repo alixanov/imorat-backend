@@ -45,12 +45,16 @@ const userSchema = new mongoose.Schema({
      login: { type: String, required: true, unique: true },
      password: { type: String, required: true },
 });
+
+
+
 //
 const HomeAdding = mongoose.model('HomeAdding', homeAddingSchema); // Создание модели на основе схемы
 
 //
 const User = mongoose.model('User', userSchema);
 //
+
 const authMiddleware = (req, res, next) => {
      const token = req.headers.authorization?.split(' ')[1];
      if (!token) {
@@ -197,6 +201,25 @@ app.get('/get-ad/:id', async (req, res) => {
           res.status(500).json({ error: 'Сервер хатоси' });
      }
 });
+
+
+// Новый маршрут для получения информации о пользователе
+app.get('/api/user', authMiddleware, async (req, res) => {
+     try {
+          const user = await User.findById(req.userId);  // Ищем пользователя по ID, который был декодирован из токена
+          if (!user) {
+               return res.status(404).json({ message: 'Пользователь не найден' });
+          }
+          res.status(200).json({
+               login: user.login,
+               // Здесь ты можешь добавить любые данные о пользователе, которые тебе нужны
+          });
+     } catch (error) {
+          res.status(500).json({ message: 'Ошибка сервера' });
+     }
+});
+
+ 
 
 // Токенни текшириш функцияси
 const checkToken = (req, res) => {
